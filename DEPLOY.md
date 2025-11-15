@@ -10,7 +10,7 @@ Allez dans **Settings > Secrets and variables > Actions** de votre repository Gi
 - `VPS_USER` : Le nom d'utilisateur SSH (ex: `root` ou `deploy`)
 - `VPS_SSH_KEY` : La clé privée SSH pour se connecter au VPS
 - `VPS_PORT` : (Optionnel) Le port SSH, par défaut 22
-- `VPS_DEPLOY_PATH` : (Optionnel) Le chemin de déploiement sur le VPS, par défaut `/var/www/outils`
+- `VPS_DEPLOY_PATH` : (Optionnel) Le chemin de déploiement sur le VPS, par défaut `~/TOOLS`
 
 ### Générer une clé SSH
 
@@ -57,15 +57,15 @@ docker-compose --version
 Sur le VPS, créez le dossier de déploiement et clonez le repository :
 
 ```bash
-mkdir -p /var/www/outils
-cd /var/www/outils
+mkdir -p ~/TOOLS
+cd ~/TOOLS
 git clone <votre-repo-url> .
 ```
 
 ### Démarrage manuel
 
 ```bash
-cd /var/www/outils
+cd ~/TOOLS
 docker-compose up -d
 ```
 
@@ -115,7 +115,7 @@ Si vous préférez déployer manuellement :
 git push origin main
 
 # Ou manuellement sur le VPS
-cd /var/www/outils
+cd ~/TOOLS
 git pull origin main
 docker-compose up -d --build
 ```

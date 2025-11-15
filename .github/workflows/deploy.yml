@@ -59,20 +59,22 @@ jobs:
       
       - name: Create deployment directory
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "mkdir -p ${{ secrets.VPS_DEPLOY_PATH || '/var/www/outils' }}"
+          DEPLOY_PATH="${{ secrets.VPS_DEPLOY_PATH || '$HOME/TOOLS' }}"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "mkdir -p $DEPLOY_PATH"
       
       - name: Copy files to VPS
         run: |
+          DEPLOY_PATH="${{ secrets.VPS_DEPLOY_PATH || '$HOME/TOOLS' }}"
           rsync -avz --delete \
             --exclude '.git' \
             --exclude 'node_modules' \
             --exclude '.svelte-kit' \
             --exclude 'build' \
-            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH || '/var/www/outils' }}/
+            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:$DEPLOY_PATH/
       
       - name: Deploy on VPS
         run: |
-          DEPLOY_PATH="${{ secrets.VPS_DEPLOY_PATH || '/var/www/outils' }}"
+          DEPLOY_PATH="${{ secrets.VPS_DEPLOY_PATH || '$HOME/TOOLS' }}"
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
             cd $DEPLOY_PATH
             
@@ -101,7 +103,7 @@ jobs:
       - name: Health check
         run: |
           sleep 15
-          curl -f http://${{ secrets.VPS_HOST }}:${{ secrets.VPS_PORT || 3000 }} || echo "Health check failed, but deployment completed"
+          curl -f http://${{ secrets.VPS_HOST }}:${{ secrets.VPS_PORT || 3001 }} || echo "Health check failed, but deployment completed"
       
       - name: Notify deployment success
         if: success()
