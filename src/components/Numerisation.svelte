@@ -218,13 +218,45 @@
 		}, 'image/jpeg', 0.95);
 	}
 
-	function downloadImage() {
+	async function downloadImage() {
 		if (!capturedImage) return;
 		
+		// Essayer d'utiliser Web Share API sur mobile (iOS/Android)
+		if (navigator.share && navigator.canShare) {
+			try {
+				// Convertir l'image en blob pour le partage
+				const response = await fetch(capturedImage);
+				const blob = await response.blob();
+				const file = new File([blob], `photo-argentique-${Date.now()}.jpg`, { type: 'image/jpeg' });
+				
+				if (navigator.canShare({ files: [file] })) {
+					await navigator.share({
+						files: [file],
+						title: 'Photo argentique',
+						text: 'Photo numérisée'
+					});
+					return;
+				}
+			} catch (error) {
+				// Si le partage échoue, continuer avec la méthode de téléchargement classique
+				console.log('Web Share API non disponible, utilisation du téléchargement classique');
+			}
+		}
+		
+		// Méthode de téléchargement classique (fonctionne aussi sur mobile)
 		const link = document.createElement('a');
 		link.href = capturedImage;
 		link.download = `photo-argentique-${Date.now()}.jpg`;
+		
+		// Pour iOS Safari, il faut ajouter le lien au DOM temporairement
+		document.body.appendChild(link);
 		link.click();
+		document.body.removeChild(link);
+		
+		// Sur Android, essayer d'ouvrir dans un nouvel onglet pour permettre l'enregistrement
+		if (/Android/i.test(navigator.userAgent)) {
+			window.open(capturedImage, '_blank');
+		}
 	}
 
 	function resetCapture() {
