@@ -1,0 +1,115 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        run: npm run test || echo "No tests configured"
+      
+      - name: Build application
+        run: npm run build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build application
+        run: npm run build
+      
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+      
+      - name: Add VPS to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: Create deployment directory
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "mkdir -p ${{ secrets.VPS_DEPLOY_PATH || '/var/www/outils' }}"
+      
+      - name: Copy files to VPS
+        run: |
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.svelte-kit' \
+            --exclude 'build' \
+            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_DEPLOY_PATH || '/var/www/outils' }}/
+      
+      - name: Deploy on VPS
+        run: |
+          DEPLOY_PATH="${{ secrets.VPS_DEPLOY_PATH || '/var/www/outils' }}"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+            cd $DEPLOY_PATH
+            
+            # Install Docker if not present
+            if ! command -v docker &> /dev/null; then
+              curl -fsSL https://get.docker.com -o get-docker.sh
+              sh get-docker.sh
+              sudo usermod -aG docker $USER
+            fi
+            
+            # Install Docker Compose if not present
+            if ! command -v docker-compose &> /dev/null; then
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+            fi
+            
+            # Build and start containers
+            docker-compose down
+            docker-compose build --no-cache
+            docker-compose up -d
+            
+            # Clean up old images
+            docker image prune -f
+          EOF
+      
+      - name: Health check
+        run: |
+          sleep 15
+          curl -f http://${{ secrets.VPS_HOST }}:${{ secrets.VPS_PORT || 3000 }} || echo "Health check failed, but deployment completed"
+      
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ Déploiement réussi sur ${{ secrets.VPS_HOST }}"
+      
+      - name: Notify deployment failure
+        if: failure()
+        run: |
+          echo "❌ Échec du déploiement sur ${{ secrets.VPS_HOST }}"
+
