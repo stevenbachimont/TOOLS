@@ -13,6 +13,15 @@
 	async function startCamera() {
 		try {
 			cameraError = null;
+			
+			// Vérifier que l'API est disponible
+			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+				cameraError = 'L\'accès à la caméra nécessite HTTPS ou localhost.';
+				console.error('navigator.mediaDevices non disponible');
+				useCamera = false;
+				return;
+			}
+			
 			const constraints = {
 				video: {
 					facingMode: 'environment',

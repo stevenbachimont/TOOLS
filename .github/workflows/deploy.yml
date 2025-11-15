@@ -102,8 +102,20 @@ jobs:
       
       - name: Health check
         run: |
-          sleep 15
-          curl -f http://${{ secrets.VPS_HOST }}:${{ secrets.VPS_PORT || 3001 }} || echo "Health check failed, but deployment completed"
+          DEPLOY_PATH="${{ secrets.VPS_DEPLOY_PATH || '$HOME/TOOLS' }}"
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+            sleep 10
+            if curl -f http://localhost:3001 > /dev/null 2>&1; then
+              echo "✅ Health check successful - Application is running"
+              exit 0
+            else
+              echo "⚠️ Health check failed - Application may not be ready yet"
+              # Check container status
+              docker ps | grep outils || echo "Container not running"
+              docker-compose logs --tail=50 outils || true
+              exit 0
+            fi
+          EOF
       
       - name: Notify deployment success
         if: success()

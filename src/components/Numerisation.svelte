@@ -40,6 +40,12 @@
 
 	async function loadCameras() {
 		try {
+			// Vérifier que l'API est disponible
+			if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+				console.warn('navigator.mediaDevices non disponible - nécessite HTTPS ou localhost');
+				return;
+			}
+			
 			const devices = await navigator.mediaDevices.enumerateDevices();
 			availableCameras = devices
 				.filter(device => device.kind === 'videoinput')
@@ -59,6 +65,14 @@
 	async function startCamera() {
 		try {
 			cameraError = null;
+			
+			// Vérifier que l'API est disponible
+			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+				cameraError = 'L\'accès à la caméra nécessite HTTPS ou localhost.';
+				console.error('navigator.mediaDevices non disponible');
+				return;
+			}
+			
 			const constraints = {
 				video: {
 					deviceId: selectedCamera ? { exact: selectedCamera } : undefined,
