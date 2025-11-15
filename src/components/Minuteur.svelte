@@ -431,9 +431,16 @@
 		position: relative;
 		width: 280px;
 		height: 280px;
+		margin: 0 auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.progress-ring {
+		position: absolute;
+		top: 0;
+		left: 0;
 		transform: rotate(-90deg);
 	}
 
@@ -442,11 +449,13 @@
 	}
 
 	.time-text {
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
+		position: relative;
+		z-index: 1;
 		text-align: center;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.time-value {
