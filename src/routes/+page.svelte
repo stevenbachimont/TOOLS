@@ -1,14 +1,14 @@
 <script>
 	import { goto } from '$app/navigation';
-	import Minuteur from '../components/Minuteur.svelte';
 	import Posemetre from '../components/Posemetre.svelte';
+	import Minuteur from '../components/Minuteur.svelte';
 	import Numerisation from '../components/Numerisation.svelte';
 
-	let activeTab = 'minuteur';
+	let activeTab = 'posemetre';
 
 	const tabs = [
-		{ id: 'minuteur', label: 'Minuteur' },
 		{ id: 'posemetre', label: 'Posemètre' },
+		{ id: 'minuteur', label: 'Minuteur' },
 		{ id: 'numerisation', label: 'Numérisation' }
 	];
 </script>
@@ -31,10 +31,10 @@
 	</nav>
 
 	<div class="content">
-		{#if activeTab === 'minuteur'}
-			<Minuteur />
-		{:else if activeTab === 'posemetre'}
+		{#if activeTab === 'posemetre'}
 			<Posemetre />
+		{:else if activeTab === 'minuteur'}
+			<Minuteur />
 		{:else if activeTab === 'numerisation'}
 			<Numerisation />
 		{/if}

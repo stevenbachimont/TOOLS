@@ -242,7 +242,7 @@
 
 	<div class="timer-display">
 		<div class="time-circle">
-			<svg class="progress-ring" width="280" height="280">
+			<svg class="progress-ring" width="280" height="280" viewBox="0 0 280 280">
 				<circle
 					class="progress-ring-circle"
 					stroke="#333333"
@@ -432,15 +432,14 @@
 		width: 280px;
 		height: 280px;
 		margin: 0 auto;
-		display: flex;
-		align-items: center;
-		justify-content: center;
 	}
 
 	.progress-ring {
 		position: absolute;
 		top: 0;
 		left: 0;
+		width: 100%;
+		height: 100%;
 		transform: rotate(-90deg);
 	}
 
@@ -449,13 +448,14 @@
 	}
 
 	.time-text {
-		position: relative;
-		z-index: 1;
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
 		text-align: center;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
+		width: 100%;
+		z-index: 1;
+		pointer-events: none;
 	}
 
 	.time-value {
