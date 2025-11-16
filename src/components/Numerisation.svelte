@@ -32,6 +32,8 @@
 
 	onMount(async () => {
 		await loadCameras();
+		// Démarrer automatiquement la caméra
+		await startCamera();
 	});
 
 	onDestroy(() => {
@@ -345,20 +347,13 @@
 			{/if}
 
 			<div class="capture-controls">
-				{#if !stream}
-					<button class="start-btn" on:click={startCamera}>
-						Démarrer la caméra
-					</button>
-				{:else}
+				{#if stream}
 					<button class="capture-btn" on:click={capturePhoto} disabled={isCapturing}>
 						{#if isCapturing}
 							Capture...
 						{:else}
 							Capturer
 						{/if}
-					</button>
-					<button class="stop-btn" on:click={stopCamera}>
-						Arrêter
 					</button>
 				{/if}
 			</div>
@@ -553,9 +548,7 @@
 		justify-content: center;
 	}
 
-	.start-btn,
-	.capture-btn,
-	.stop-btn {
+	.capture-btn {
 		padding: 1rem 2rem;
 		border: 1px solid #ffffff;
 		border-radius: 0;
@@ -567,20 +560,11 @@
 		color: #ffffff;
 		text-transform: uppercase;
 		letter-spacing: 0.1em;
-	}
-
-	.start-btn {
-		width: 100%;
-	}
-
-	.capture-btn {
 		flex: 1;
 		max-width: 200px;
 	}
 
-	.start-btn:active,
-	.capture-btn:active,
-	.stop-btn:active {
+	.capture-btn:active {
 		background: #ffffff;
 		color: #000000;
 	}

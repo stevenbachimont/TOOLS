@@ -1,16 +1,23 @@
 <script>
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import Posemetre from '../components/Posemetre.svelte';
 	import Minuteur from '../components/Minuteur.svelte';
 	import Numerisation from '../components/Numerisation.svelte';
 
-	let activeTab = 'posemetre';
+	let activeTab = 'minuteur';
+	let posemetreComponent;
+	let numerisationComponent;
 
 	const tabs = [
 		{ id: 'posemetre', label: 'Posemètre' },
 		{ id: 'minuteur', label: 'Minuteur' },
 		{ id: 'numerisation', label: 'Numérisation' }
 	];
+
+	function handleTabChange(newTab) {
+		activeTab = newTab;
+	}
 </script>
 
 <div class="app-container">
@@ -23,7 +30,7 @@
 			<button
 				class="tab-button"
 				class:active={activeTab === tab.id}
-				on:click={() => activeTab = tab.id}
+				on:click={() => handleTabChange(tab.id)}
 			>
 				{tab.label}
 			</button>
@@ -32,11 +39,11 @@
 
 	<div class="content">
 		{#if activeTab === 'posemetre'}
-			<Posemetre />
+			<Posemetre bind:this={posemetreComponent} />
 		{:else if activeTab === 'minuteur'}
 			<Minuteur />
 		{:else if activeTab === 'numerisation'}
-			<Numerisation />
+			<Numerisation bind:this={numerisationComponent} />
 		{/if}
 	</div>
 </div>

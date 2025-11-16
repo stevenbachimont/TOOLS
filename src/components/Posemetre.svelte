@@ -113,14 +113,10 @@
 		measuredEV = baseEV;
 	}
 
-	async function toggleCamera() {
-		if (useCamera) {
-			stopCamera();
-		} else {
-			useCamera = true;
-			await startCamera();
-		}
-	}
+	onMount(async () => {
+		useCamera = true;
+		await startCamera();
+	});
 
 	onDestroy(() => {
 		stopCamera();
@@ -128,30 +124,17 @@
 </script>
 
 <div class="posemetre-container">
-	<div class="camera-control">
-		<button 
-			class="camera-toggle-btn" 
-			class:active={useCamera}
-			on:click={toggleCamera}
-		>
-			{#if useCamera}
-				Mesure en cours
-			{:else}
-				Activer la mesure caméra
-			{/if}
-		</button>
-		{#if useCamera && measuredBrightness > 0}
-			<div class="brightness-indicator">
-				<div class="brightness-label">Luminosité: {(measuredBrightness * 100).toFixed(1)}%</div>
-				<div class="brightness-bar">
-					<div 
-						class="brightness-fill" 
-						style="width: {measuredBrightness * 100}%"
-					></div>
-				</div>
+	{#if useCamera && measuredBrightness > 0}
+		<div class="brightness-indicator">
+			<div class="brightness-label">Luminosité: {(measuredBrightness * 100).toFixed(1)}%</div>
+			<div class="brightness-bar">
+				<div 
+					class="brightness-fill" 
+					style="width: {measuredBrightness * 100}%"
+				></div>
 			</div>
-		{/if}
-	</div>
+		</div>
+	{/if}
 
 	{#if useCamera}
 		<div class="video-preview">
@@ -182,8 +165,10 @@
 		<div class="ev-label">
 			{#if useCamera && measuredEV !== 0}
 				Mesure en temps réel
+			{:else if cameraError}
+				{cameraError}
 			{:else}
-				Activez la caméra pour mesurer
+				Initialisation...
 			{/if}
 		</div>
 	</div>
@@ -196,37 +181,8 @@
 		max-width: 100%;
 	}
 
-	.camera-control {
-		margin-bottom: 1.5rem;
-	}
-
-	.camera-toggle-btn {
-		width: 100%;
-		padding: 1rem;
-		border: 1px solid #ffffff;
-		background: transparent;
-		border-radius: 0;
-		cursor: pointer;
-		font-size: 0.9rem;
-		font-weight: 300;
-		color: #ffffff;
-		transition: all 0.2s ease;
-		margin-bottom: 1rem;
-		text-transform: uppercase;
-		letter-spacing: 0.1em;
-	}
-
-	.camera-toggle-btn.active {
-		background: #ffffff;
-		color: #000000;
-	}
-
-	.camera-toggle-btn:active {
-		opacity: 0.7;
-	}
-
 	.brightness-indicator {
-		margin-top: 0.75rem;
+		margin-bottom: 1rem;
 	}
 
 	.brightness-label {
