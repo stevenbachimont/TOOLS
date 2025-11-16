@@ -9,6 +9,10 @@
 	let measuredBrightness = 0;
 	let measuredEV = 0;
 	let measurementInterval = null;
+	let iso = 400;
+	let showSettings = false;
+	let exposures = [];
+	let showMeasureZone = true;
 
 	async function startCamera() {
 		try {
@@ -88,29 +92,110 @@
 		const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 		const data = imageData.data;
 		
-		// Calculer la luminosité moyenne (méthode de luminance relative)
-		let sum = 0;
-		let count = 0;
+		// Calculer la luminance moyenne (pondérée selon la perception humaine)
+		let totalLuminance = 0;
+		let pixelCount = 0;
 		
-		// Échantillonner tous les 4 pixels pour améliorer les performances
-		for (let i = 0; i < data.length; i += 16) {
+		// Échantillonner tous les 4 pixels pour une meilleure précision
+		for (let i = 0; i < data.length; i += 4) {
 			const r = data[i];
 			const g = data[i + 1];
 			const b = data[i + 2];
 			
-			// Formule de luminance relative (0-1)
-			const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-			sum += luminance;
-			count++;
+			// Formule de luminance relative (0-255)
+			const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+			totalLuminance += luminance;
+			pixelCount++;
 		}
 		
-		measuredBrightness = sum / count;
+		const avgLuminance = totalLuminance / pixelCount;
 		
-		// Convertir la luminosité en valeur EV
-		// La formule approximative : EV = log2(luminance * constante)
-		// Pour une exposition correcte à ISO 100, f/1.0, 1s : EV = log2(luminance * 250)
-		const baseEV = Math.log2(measuredBrightness * 250);
-		measuredEV = baseEV;
+		// Normaliser pour l'affichage (0-1)
+		measuredBrightness = avgLuminance / 255;
+		
+		// Convertir la luminance en valeur EV
+		// Formule ajustée pour correspondre aux conditions réelles
+		// La constante 12.5 est ajustée pour calibrer avec les caméras mobiles
+		// Ajout de 2 points pour corriger le décalage observé
+		// EV = log2(luminance / constante) + offset
+		// Pour une meilleure précision, on utilise une constante plus petite et on ajoute un offset
+		const calculatedEv = Math.log2(avgLuminance / 3.125) + 4;
+		
+		// S'assurer que l'EV est valide (pas NaN ou Infinity)
+		if (isFinite(calculatedEv)) {
+			measuredEV = calculatedEv;
+		} else {
+			measuredEV = 0;
+		}
+		
+		// Calculer les combinaisons d'exposition
+		if (measuredEV !== 0) {
+			calculateExposures(measuredEV);
+		}
+	}
+
+	const apertures = [1.4, 2, 2.8, 4, 5.6, 8, 11, 16, 22];
+	const shutterSpeeds = [
+		{ value: 1/8000, display: '1/8000' },
+		{ value: 1/4000, display: '1/4000' },
+		{ value: 1/2000, display: '1/2000' },
+		{ value: 1/1000, display: '1/1000' },
+		{ value: 1/500, display: '1/500' },
+		{ value: 1/250, display: '1/250' },
+		{ value: 1/125, display: '1/125' },
+		{ value: 1/60, display: '1/60' },
+		{ value: 1/30, display: '1/30' },
+		{ value: 1/15, display: '1/15' },
+		{ value: 1/8, display: '1/8' },
+		{ value: 1/4, display: '1/4' },
+		{ value: 1/2, display: '1/2' },
+		{ value: 1, display: '1"' },
+		{ value: 2, display: '2"' },
+		{ value: 4, display: '4"' }
+	];
+
+	function calculateExposures(evValue) {
+		const combinations = [];
+		// Ajuster l'EV selon l'ISO : EV_iso = EV - log2(ISO/100)
+		const targetEv = evValue - Math.log2(iso / 100);
+
+		apertures.forEach(aperture => {
+			// EV = log2(N²/t) où N = ouverture, t = temps
+			// Donc t = N² / 2^EV
+			const requiredTime = (aperture * aperture) / Math.pow(2, targetEv);
+			
+			// Trouve la vitesse la plus proche
+			let closestSpeed = shutterSpeeds[0];
+			let minDiff = Math.abs(closestSpeed.value - requiredTime);
+
+			shutterSpeeds.forEach(speed => {
+				const diff = Math.abs(speed.value - requiredTime);
+				if (diff < minDiff) {
+					minDiff = diff;
+					closestSpeed = speed;
+				}
+			});
+
+			combinations.push({
+				aperture: `f/${aperture}`,
+				shutter: closestSpeed.display
+			});
+		});
+
+		exposures = combinations;
+	}
+
+	function toggleSettings() {
+		showSettings = !showSettings;
+	}
+
+	function toggleMeasureZone() {
+		showMeasureZone = !showMeasureZone;
+	}
+
+	// Recalculer les combinaisons quand l'ISO ou l'EV change
+	$: if (measuredEV !== 0 && iso) {
+		calculateExposures(measuredEV);
 	}
 
 	onMount(async () => {
@@ -124,6 +209,30 @@
 </script>
 
 <div class="posemetre-container">
+	<div class="controls-header">
+		<button class="settings-btn" on:click={toggleSettings}>
+			Réglages
+		</button>
+		<button class="zone-btn" on:click={toggleMeasureZone} class:active={showMeasureZone}>
+			Zone de mesure
+		</button>
+	</div>
+
+	{#if showSettings}
+		<div class="settings-panel">
+			<label for="iso-select">ISO / Sensibilité</label>
+			<select id="iso-select" bind:value={iso} class="iso-select">
+				<option value="50">ISO 50</option>
+				<option value="100">ISO 100</option>
+				<option value="200">ISO 200</option>
+				<option value="400">ISO 400</option>
+				<option value="800">ISO 800</option>
+				<option value="1600">ISO 1600</option>
+				<option value="3200">ISO 3200</option>
+			</select>
+		</div>
+	{/if}
+
 	{#if useCamera && measuredBrightness > 0}
 		<div class="brightness-indicator">
 			<div class="brightness-label">Luminosité: {(measuredBrightness * 100).toFixed(1)}%</div>
@@ -146,6 +255,9 @@
 				class="camera-video"
 			></video>
 			<canvas bind:this={canvas} style="display: none;"></canvas>
+			{#if showMeasureZone}
+				<div class="measure-zone"></div>
+			{/if}
 		</div>
 		{#if cameraError}
 			<div class="error-message">
@@ -164,7 +276,7 @@
 		</div>
 		<div class="ev-label">
 			{#if useCamera && measuredEV !== 0}
-				Mesure en temps réel
+				ISO {iso}
 			{:else if cameraError}
 				{cameraError}
 			{:else}
@@ -172,6 +284,20 @@
 			{/if}
 		</div>
 	</div>
+
+	{#if exposures.length > 0}
+		<div class="exposures-panel">
+			<div class="exposures-title">Réglages recommandés</div>
+			<div class="exposures-list">
+				{#each exposures.slice(0, 9) as exp}
+					<div class="exposure-item">
+						<span class="exposure-aperture">{exp.aperture}</span>
+						<span class="exposure-shutter">{exp.shutter}</span>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -179,6 +305,70 @@
 		background: transparent;
 		padding: 0;
 		max-width: 100%;
+	}
+
+	.controls-header {
+		display: flex;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.settings-btn,
+	.zone-btn {
+		flex: 1;
+		padding: 0.75rem 1rem;
+		border: 1px solid #333333;
+		background: transparent;
+		border-radius: 0;
+		cursor: pointer;
+		font-size: 0.85rem;
+		font-weight: 300;
+		color: #888888;
+		transition: all 0.2s ease;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.settings-btn:active,
+	.zone-btn:active {
+		opacity: 0.7;
+	}
+
+	.zone-btn.active {
+		border-color: #ffffff;
+		color: #ffffff;
+	}
+
+	.settings-panel {
+		margin-bottom: 1rem;
+		padding: 1rem;
+		border: 1px solid #333333;
+	}
+
+	.settings-panel label {
+		display: block;
+		font-size: 0.85rem;
+		color: #888888;
+		margin-bottom: 0.5rem;
+		font-weight: 300;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.iso-select {
+		width: 100%;
+		padding: 0.75rem;
+		border: 1px solid #333333;
+		border-radius: 0;
+		font-size: 0.9rem;
+		background: #000000;
+		color: #ffffff;
+		cursor: pointer;
+	}
+
+	.iso-select:focus {
+		outline: none;
+		border-color: #ffffff;
 	}
 
 	.brightness-indicator {
@@ -223,6 +413,18 @@
 		object-fit: cover;
 	}
 
+	.measure-zone {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 30%;
+		height: 30%;
+		border: 2px solid rgba(255, 255, 255, 0.5);
+		pointer-events: none;
+		z-index: 10;
+	}
+
 	.error-message {
 		background: transparent;
 		color: #ffffff;
@@ -260,6 +462,45 @@
 		font-weight: 300;
 		text-transform: uppercase;
 		letter-spacing: 0.1em;
+	}
+
+	.exposures-panel {
+		margin-top: 1.5rem;
+		border: 1px solid #333333;
+		padding: 1rem;
+	}
+
+	.exposures-title {
+		font-size: 0.85rem;
+		color: #888888;
+		font-weight: 300;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		margin-bottom: 1rem;
+	}
+
+	.exposures-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.exposure-item {
+		display: flex;
+		justify-content: space-between;
+		padding: 0.75rem;
+		border: 1px solid #333333;
+		font-size: 0.9rem;
+	}
+
+	.exposure-aperture {
+		font-weight: 300;
+		color: #ffffff;
+	}
+
+	.exposure-shutter {
+		font-weight: 300;
+		color: #ffffff;
 	}
 
 	@media (max-width: 480px) {
