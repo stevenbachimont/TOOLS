@@ -179,7 +179,24 @@
 
 	$: {
 		if (selectedFilm) {
-			temperatureCompensation = (temperature - 20) * 60; // en secondes
+			// Compensation négative si température > 20°C (on soustrait du temps)
+			// Compensation positive si température < 20°C (on ajoute du temps)
+			temperatureCompensation = -(temperature - 20) * 60; // en secondes
+		}
+	}
+
+	// Temps ajusté réactif qui se met à jour automatiquement
+	$: adjustedTime = calculateDevelopmentTime();
+
+	// Initialiser et mettre à jour le chrono avec le temps ajusté
+	// (seulement si le chrono n'est pas en cours et qu'on est à l'étape développement)
+	$: {
+		if (selectedFilm && !isRunning && selectedStep === 'development') {
+			const stepTime = getCurrentStepTime();
+			if (stepTime > 0) {
+				totalTime = stepTime;
+				timeLeft = stepTime;
+			}
 		}
 	}
 
@@ -232,10 +249,6 @@
 						Compensation : {temperatureCompensation > 0 ? '+' : ''}{Math.round(temperatureCompensation / 60 * 10) / 10} min
 					</div>
 				{/if}
-			</div>
-			<div class="info-row">
-				<span class="info-label">Temps ajusté :</span>
-				<span class="info-value">{formatTime(calculateDevelopmentTime())}</span>
 			</div>
 		</div>
 	{/if}
@@ -303,7 +316,8 @@
 		{:else}
 			<div class="running-controls">
 				<button class="stop-btn" on:click={stopTimer}>
-					Pause
+					Arrêter
+					
 				</button>
 				<button class="reset-btn" on:click={resetTimer}>
 					Réinitialiser
