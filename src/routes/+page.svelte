@@ -22,6 +22,7 @@
 
 <div class="app-container">
 	<header>
+		<img src="/logo%20light.png" alt="Logo" class="logo" />
 		<h1>TOOLS</h1>
 	</header>
 
@@ -64,6 +65,16 @@
 		padding: 1.5rem 1rem;
 		text-align: center;
 		border-bottom: 1px solid #333333;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 1rem;
+	}
+
+	.logo {
+		height: 2rem;
+		width: auto;
+		object-fit: contain;
 	}
 
 	header h1 {
@@ -116,6 +127,10 @@
 	}
 
 	@media (max-width: 480px) {
+		.logo {
+			height: 1.5rem;
+		}
+
 		header h1 {
 			font-size: 1rem;
 		}
