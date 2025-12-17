@@ -99,12 +99,13 @@
 	function startPreview() {
 		if (!videoElement || !previewCanvas) return;
 		
+		// S'assurer que le contexte est bien initialisé
 		previewCtx = previewCanvas.getContext('2d');
 		
 		function updatePreview() {
 			if (!videoElement || !previewCanvas || !previewCtx) return;
 			
-			if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+			if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA && videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
 				const aspectRatio = getAspectRatio();
 				const videoWidth = videoElement.videoWidth;
 				const videoHeight = videoElement.videoHeight;
@@ -261,8 +262,32 @@
 		}
 	}
 
-	function resetCapture() {
+	async function resetCapture() {
 		capturedImage = null;
+		
+		// Vérifier si le stream est toujours actif
+		const isStreamActive = stream && stream.getTracks().some(track => track.readyState === 'live');
+		
+		if (isStreamActive && videoElement && previewCanvas) {
+			// Le stream est actif, relancer juste le preview
+			stopPreview();
+			setTimeout(() => {
+				if (videoElement && previewCanvas && stream) {
+					startPreview();
+				}
+			}, 50);
+		} else {
+			// Le stream n'est plus actif, relancer complètement la caméra
+			stopCamera();
+			await startCamera();
+		}
+	}
+
+	function handlePreviewKeydown(event) {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			resetCapture();
+		}
 	}
 
 	function toggleGrid() {
@@ -360,7 +385,7 @@
 		</div>
 	{:else}
 		<div class="preview-section">
-			<div class="preview-image" style="aspect-ratio: {getAspectRatio()};">
+			<div class="preview-image" style="aspect-ratio: {getAspectRatio()};" on:click={resetCapture} on:keydown={handlePreviewKeydown} role="button" tabindex="0">
 				<img src={capturedImage} alt="Photo capturée" />
 			</div>
 			<div class="preview-info">
@@ -378,9 +403,6 @@
 			<div class="preview-controls">
 				<button class="download-btn" on:click={downloadImage}>
 					Télécharger
-				</button>
-				<button class="retry-btn" on:click={resetCapture}>
-					Nouvelle capture
 				</button>
 			</div>
 		</div>
@@ -609,12 +631,23 @@
 		background: #000;
 		border: 1px solid #333333;
 		overflow: hidden;
+		cursor: pointer;
+		transition: border-color 0.2s ease;
+	}
+
+	.preview-image:hover {
+		border-color: #ffffff;
+	}
+
+	.preview-image:active {
+		opacity: 0.8;
 	}
 
 	.preview-image img {
 		width: 100%;
 		height: 100%;
 		object-fit: contain;
+		pointer-events: none;
 	}
 
 	.preview-controls {
@@ -622,8 +655,7 @@
 		gap: 1rem;
 	}
 
-	.download-btn,
-	.retry-btn {
+	.download-btn {
 		flex: 1;
 		padding: 1rem 2rem;
 		border: 1px solid #ffffff;
@@ -638,8 +670,7 @@
 		letter-spacing: 0.1em;
 	}
 
-	.download-btn:active,
-	.retry-btn:active {
+	.download-btn:active {
 		background: #ffffff;
 		color: #000000;
 	}
