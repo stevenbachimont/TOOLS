@@ -10,6 +10,7 @@
 	let currentStepIndex = 0;
 	let temperature = 20; // Température en °C
 	let temperatureCompensation = 0;
+	let showRinseInstructions = false;
 
 	// Base de données des pellicules avec temps de développement au caffenol (20°C)
 	const films = [
@@ -121,26 +122,46 @@
 		totalTime = 0;
 		currentStepIndex = 0;
 		selectedStep = 'development';
+		showRinseInstructions = false;
+	}
+
+	function getRinseSteps() {
+		const steps = [];
+		for (let i = 5; i <= 10; i++) {
+			steps.push(
+				{ action: 'Vider', type: 'empty' },
+				{ action: 'Remplir d\'eau', type: 'fill' },
+				{ action: `Agiter ${i} fois`, type: 'agitate', count: i }
+			);
+		}
+		return steps;
 	}
 
 	function nextStep() {
 		if (selectedStep === 'development') {
 			selectedStep = 'rinse';
+			showRinseInstructions = true;
+			stopTimer();
 		} else if (selectedStep === 'rinse') {
 			selectedStep = 'fixation';
+			showRinseInstructions = false;
+			// Démarrer automatiquement l'étape de fixation après 2 secondes
+			setTimeout(() => {
+				const stepTime = getCurrentStepTime();
+				if (stepTime > 0) {
+					startTimer(stepTime);
+				}
+			}, 2000);
 		} else {
 			// Fin du processus
 			resetTimer();
 			return;
 		}
-		
-		// Démarrer automatiquement l'étape suivante après 2 secondes
-		setTimeout(() => {
-			const stepTime = getCurrentStepTime();
-			if (stepTime > 0) {
-				startTimer(stepTime);
-			}
-		}, 2000);
+	}
+
+	function continueToFixation() {
+		showRinseInstructions = false;
+		nextStep();
 	}
 
 	function startDevelopment() {
@@ -155,9 +176,37 @@
 		startTimer(stepTime);
 	}
 
+	function handleStepKeydown(event) {
+		if ((event.key === 'Enter' || event.key === ' ') && !isRunning && selectedFilm) {
+			event.preventDefault();
+			startDevelopment();
+		}
+	}
+
 	function playAlarm() {
-		const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWi77+efTRAMUKfj8LZjHAY4kdfyzHksBSR3x/DdkEAKFF606euoVRQKRp/g8r5sIQUrgc7y2Yk2CBlou+/nn00QDFCn4/C2YxwGOJHX8sx5LAUkd8fw3ZBAC');
-		audio.play().catch(() => {});
+		// Générer un son "ding" avec Web Audio API
+		try {
+			const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+			const oscillator = audioContext.createOscillator();
+			const gainNode = audioContext.createGain();
+			
+			// Configuration du son "ding" (note courte et claire)
+			oscillator.type = 'sine';
+			oscillator.frequency.setValueAtTime(800, audioContext.currentTime); // Fréquence de 800 Hz
+			
+			// Enveloppe ADSR pour un son "ding" naturel
+			gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+			gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01); // Attaque rapide
+			gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3); // Décroissance
+			
+			oscillator.connect(gainNode);
+			gainNode.connect(audioContext.destination);
+			
+			oscillator.start(audioContext.currentTime);
+			oscillator.stop(audioContext.currentTime + 0.3);
+		} catch (error) {
+			console.error('Erreur lors de la lecture du son:', error);
+		}
 		
 		// Vibration si disponible
 		if (navigator.vibrate) {
@@ -199,6 +248,14 @@
 			}
 		}
 	}
+
+	// Détecter si on est dans une période d'agitation :
+	// - Première minute : bleu tout le temps
+	// - Chaque minute suivante : bleu pendant 3 secondes au début (secondes 60, 59, 58, etc.)
+	$: isAgitationPhase = isRunning && selectedStep === 'development' && totalTime > 0 && (
+		timeLeft > (totalTime - 60) || // Première minute complète
+		(timeLeft <= (totalTime - 60) && (timeLeft % 60 === 0 || timeLeft % 60 >= 58)) // 3 premières secondes de chaque minute suivante
+	);
 
 	onMount(() => {
 		if ('Notification' in window) {
@@ -253,44 +310,75 @@
 		</div>
 	{/if}
 
-	<div class="timer-display">
-		<div class="time-circle">
-			<svg class="progress-ring" width="280" height="280" viewBox="0 0 280 280">
-				<circle
-					class="progress-ring-circle"
-					stroke="#333333"
-					stroke-width="2"
-					fill="transparent"
-					r="130"
-					cx="140"
-					cy="140"
-				/>
-				{#if totalTime > 0}
+	{#if showRinseInstructions}
+		<div class="rinse-instructions">
+			<h2 class="rinse-title">Méthode de rinçage</h2>
+			<div class="rinse-steps">
+				{#each getRinseSteps() as step, index}
+					<div class="rinse-step" class:empty={step.type === 'empty'} class:fill={step.type === 'fill'} class:agitate={step.type === 'agitate'}>
+						<div class="step-number">{index + 1}</div>
+						<div class="step-action">{step.action}</div>
+					</div>
+				{/each}
+			</div>
+			<button class="continue-btn" on:click={continueToFixation}>
+				Continuer vers le fixage
+			</button>
+		</div>
+	{:else}
+		<div class="timer-display">
+			<div class="time-circle">
+				<svg class="progress-ring" width="280" height="280" viewBox="0 0 280 280">
 					<circle
-						class="progress-ring-circle progress"
-						stroke="#ffffff"
+						class="progress-ring-circle"
+						stroke="#333333"
 						stroke-width="2"
 						fill="transparent"
 						r="130"
 						cx="140"
 						cy="140"
-						stroke-dasharray="{2 * Math.PI * 130}"
-						stroke-dashoffset="{2 * Math.PI * 130 * (1 - timeLeft / totalTime)}"
-						transform="rotate(-90 140 140)"
 					/>
-				{/if}
-			</svg>
-			<div class="time-text">
-				<div class="time-value">{formatTime(timeLeft)}</div>
-				{#if selectedStep}
-					<div class="preset-name">{getStepName()}</div>
-				{/if}
+					{#if totalTime > 0}
+						<circle
+							class="progress-ring-circle progress"
+							class:agitation={isAgitationPhase}
+							stroke={isAgitationPhase ? "#4A90E2" : "#ffffff"}
+							stroke-width="2"
+							fill="transparent"
+							r="130"
+							cx="140"
+							cy="140"
+							stroke-dasharray="{2 * Math.PI * 130}"
+							stroke-dashoffset="{2 * Math.PI * 130 * (1 - timeLeft / totalTime)}"
+							transform="rotate(-90 140 140)"
+						/>
+					{/if}
+				</svg>
+				<div class="time-text">
+					<div class="time-value">{formatTime(timeLeft)}</div>
+					{#if selectedStep}
+						<div class="preset-name">{getStepName()}</div>
+					{/if}
+				</div>
 			</div>
 		</div>
-	</div>
+	{/if}
 
 	<div class="steps-indicator">
-		<div class="step" class:active={selectedStep === 'development'} class:completed={selectedStep !== 'development' && !isRunning && timeLeft === 0}>
+		<div 
+			class="step" 
+			class:active={selectedStep === 'development'} 
+			class:completed={selectedStep !== 'development' && !isRunning && timeLeft === 0}
+			class:clickable={!isRunning && selectedFilm}
+			on:click={() => {
+				if (!isRunning && selectedFilm) {
+					startDevelopment();
+				}
+			}}
+			on:keydown={handleStepKeydown}
+			role="button"
+			tabindex={!isRunning && selectedFilm ? 0 : -1}
+		>
 			<div class="step-number">1</div>
 			<div class="step-label">Révélation</div>
 		</div>
@@ -302,28 +390,6 @@
 			<div class="step-number">3</div>
 			<div class="step-label">Fixage</div>
 		</div>
-	</div>
-
-	<div class="controls">
-		{#if !isRunning}
-			<button 
-				class="start-btn" 
-				on:click={startDevelopment}
-				disabled={!selectedFilm}
-			>
-				Démarrer le développement
-			</button>
-		{:else}
-			<div class="running-controls">
-				<button class="stop-btn" on:click={stopTimer}>
-					Arrêter
-					
-				</button>
-				<button class="reset-btn" on:click={resetTimer}>
-					Réinitialiser
-				</button>
-			</div>
-		{/if}
 	</div>
 </div>
 
@@ -518,6 +584,19 @@
 		color: #888888;
 	}
 
+	.step.clickable {
+		cursor: pointer;
+	}
+
+	.step.clickable:hover {
+		border-color: #ffffff;
+		color: #ffffff;
+	}
+
+	.step.clickable:active {
+		opacity: 0.7;
+	}
+
 	.step-number {
 		width: 32px;
 		height: 32px;
@@ -538,15 +617,79 @@
 		letter-spacing: 0.05em;
 	}
 
-	.controls {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
+	.rinse-instructions {
+		margin-bottom: 2rem;
 	}
 
-	.start-btn,
-	.stop-btn,
-	.reset-btn {
+	.rinse-title {
+		font-size: 1.2rem;
+		font-weight: 300;
+		color: #ffffff;
+		text-align: center;
+		margin-bottom: 2rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+	}
+
+	.rinse-steps {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		margin-bottom: 2rem;
+	}
+
+	.rinse-step {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 1rem;
+		border: 1px solid #333333;
+		background: transparent;
+		transition: all 0.2s ease;
+	}
+
+	.rinse-step .step-number {
+		width: 32px;
+		height: 32px;
+		border: 1px solid #333333;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-weight: 300;
+		font-size: 0.9rem;
+		color: #888888;
+		flex-shrink: 0;
+	}
+
+	.rinse-step .step-action {
+		font-size: 0.9rem;
+		font-weight: 300;
+		color: #ffffff;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.rinse-step.empty {
+		border-color: #666666;
+	}
+
+	.rinse-step.fill {
+		border-color: #4A90E2;
+	}
+
+	.rinse-step.agitate {
+		border-color: #4A90E2;
+		background: rgba(74, 144, 226, 0.1);
+	}
+
+	.rinse-step.agitate .step-number {
+		border-color: #4A90E2;
+		color: #4A90E2;
+	}
+
+	.continue-btn {
+		width: 100%;
 		padding: 1rem 2rem;
 		border: 1px solid #ffffff;
 		border-radius: 0;
@@ -560,28 +703,7 @@
 		letter-spacing: 0.1em;
 	}
 
-	.start-btn {
-		width: 100%;
-	}
-
-	.start-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
-		border-color: #333333;
-	}
-
-	.start-btn:active:not(:disabled) {
-		background: #ffffff;
-		color: #000000;
-	}
-
-	.running-controls {
-		display: flex;
-		gap: 1rem;
-	}
-
-	.stop-btn:active,
-	.reset-btn:active {
+	.continue-btn:active {
 		background: #ffffff;
 		color: #000000;
 	}
