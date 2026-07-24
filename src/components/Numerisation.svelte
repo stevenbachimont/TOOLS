@@ -24,6 +24,11 @@
 	let frameStyle = { left: '0%', top: '0%', width: '100%', height: '100%' };
 	let cropRegion = null;
 	let resizeObserver = null;
+	let supportsCanvasFilter = null;
+	let softBlurCanvas = null;
+	let softBlurCtx = null;
+	let sharpCanvas = null;
+	let sharpCtx = null;
 
 	/**
 	 * Formats argentiques nominaux (orientation native = paysage / sens de la longueur).
@@ -66,6 +71,96 @@
 		if (invertColors) filters.push('invert(1)');
 		if (blackAndWhite) filters.push('grayscale(1)');
 		return filters.join(' ') || 'none';
+	}
+
+	/** Safari iOS expose parfois `filter` sans l'appliquer : on teste réellement. */
+	function detectCanvasFilterSupport() {
+		try {
+			const test = document.createElement('canvas');
+			test.width = 2;
+			test.height = 1;
+			const ctx = test.getContext('2d');
+			if (!ctx || typeof ctx.filter === 'undefined') return false;
+			ctx.fillStyle = '#ff0000';
+			ctx.fillRect(0, 0, 1, 1);
+			ctx.filter = 'invert(100%)';
+			ctx.drawImage(test, 0, 0, 1, 1, 1, 0, 1, 1);
+			const [r, g, b] = ctx.getImageData(1, 0, 1, 1).data;
+			return r < 50 && g > 200 && b > 200;
+		} catch (error) {
+			return false;
+		}
+	}
+
+	function ensureFilterSupport() {
+		if (supportsCanvasFilter === null) {
+			supportsCanvasFilter = detectCanvasFilterSupport();
+		}
+		return supportsCanvasFilter;
+	}
+
+	function applyPixelColorTransform(ctx, x, y, width, height) {
+		if (!invertColors && !blackAndWhite) return;
+		const px = Math.max(0, Math.floor(x));
+		const py = Math.max(0, Math.floor(y));
+		const pw = Math.max(0, Math.floor(width));
+		const ph = Math.max(0, Math.floor(height));
+		if (pw < 1 || ph < 1) return;
+
+		const imageData = ctx.getImageData(px, py, pw, ph);
+		const data = imageData.data;
+
+		for (let i = 0; i < data.length; i += 4) {
+			let r = data[i];
+			let g = data[i + 1];
+			let b = data[i + 2];
+
+			if (invertColors) {
+				r = 255 - r;
+				g = 255 - g;
+				b = 255 - b;
+			}
+
+			if (blackAndWhite) {
+				const gray = (0.299 * r + 0.587 * g + 0.114 * b + 0.5) | 0;
+				r = gray;
+				g = gray;
+				b = gray;
+			}
+
+			data[i] = r;
+			data[i + 1] = g;
+			data[i + 2] = b;
+		}
+
+		ctx.putImageData(imageData, px, py);
+	}
+
+	function drawSoftBlur(
+		ctx,
+		sourceCanvas,
+		sx,
+		sy,
+		sw,
+		sh,
+		dx,
+		dy,
+		dw,
+		dh
+	) {
+		if (!softBlurCanvas) {
+			softBlurCanvas = document.createElement('canvas');
+			softBlurCtx = softBlurCanvas.getContext('2d');
+		}
+
+		const tw = Math.max(1, Math.round(dw / 14));
+		const th = Math.max(1, Math.round(dh / 14));
+		softBlurCanvas.width = tw;
+		softBlurCanvas.height = th;
+		softBlurCtx.clearRect(0, 0, tw, th);
+		softBlurCtx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, tw, th);
+		ctx.imageSmoothingEnabled = true;
+		ctx.drawImage(softBlurCanvas, 0, 0, tw, th, dx, dy, dw, dh);
 	}
 
 	function isRearCamera(label = '') {
@@ -212,7 +307,9 @@
 	function syncCanvasSize() {
 		if (!previewCanvas || !videoContainer) return;
 		const rect = videoContainer.getBoundingClientRect();
-		const dpr = Math.min(window.devicePixelRatio || 1, 2);
+		// Sur iOS (sans ctx.filter), on limite le DPR pour garder invert/N&B fluides
+		const maxDpr = ensureFilterSupport() ? 2 : 1;
+		const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
 		const width = Math.max(1, Math.round(rect.width * dpr));
 		const height = Math.max(1, Math.round(rect.height * dpr));
 		if (previewCanvas.width !== width || previewCanvas.height !== height) {
@@ -259,7 +356,8 @@
 	function startPreview() {
 		if (!videoElement || !previewCanvas) return;
 
-		previewCtx = previewCanvas.getContext('2d');
+		const useFilter = ensureFilterSupport();
+		previewCtx = previewCanvas.getContext('2d', { willReadFrequently: !useFilter });
 		syncCanvasSize();
 
 		function updatePreview() {
@@ -303,37 +401,97 @@
 
 				previewCtx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-				previewCtx.filter = `${colorFilter} blur(18px)`.replace(/^none /, '');
-				previewCtx.drawImage(
-					videoElement,
-					0,
-					0,
-					videoWidth,
-					videoHeight,
-					contain.drawX,
-					contain.drawY,
-					contain.drawWidth,
-					contain.drawHeight
-				);
+				if (useFilter) {
+					previewCtx.filter = `${colorFilter} blur(18px)`.replace(/^none /, '');
+					previewCtx.drawImage(
+						videoElement,
+						0,
+						0,
+						videoWidth,
+						videoHeight,
+						contain.drawX,
+						contain.drawY,
+						contain.drawWidth,
+						contain.drawHeight
+					);
 
-				previewCtx.filter = colorFilter;
-				previewCtx.save();
-				previewCtx.beginPath();
-				previewCtx.rect(frame.x, frame.y, frame.width, frame.height);
-				previewCtx.clip();
-				previewCtx.drawImage(
-					videoElement,
-					0,
-					0,
-					videoWidth,
-					videoHeight,
-					contain.drawX,
-					contain.drawY,
-					contain.drawWidth,
-					contain.drawHeight
-				);
-				previewCtx.restore();
-				previewCtx.filter = 'none';
+					previewCtx.filter = colorFilter;
+					previewCtx.save();
+					previewCtx.beginPath();
+					previewCtx.rect(frame.x, frame.y, frame.width, frame.height);
+					previewCtx.clip();
+					previewCtx.drawImage(
+						videoElement,
+						0,
+						0,
+						videoWidth,
+						videoHeight,
+						contain.drawX,
+						contain.drawY,
+						contain.drawWidth,
+						contain.drawHeight
+					);
+					previewCtx.restore();
+					previewCtx.filter = 'none';
+				} else {
+					// Fallback iOS / Safari : traitement pixel (ctx.filter non supporté)
+					previewCtx.drawImage(
+						videoElement,
+						0,
+						0,
+						videoWidth,
+						videoHeight,
+						contain.drawX,
+						contain.drawY,
+						contain.drawWidth,
+						contain.drawHeight
+					);
+
+					applyPixelColorTransform(
+						previewCtx,
+						contain.drawX,
+						contain.drawY,
+						contain.drawWidth,
+						contain.drawHeight
+					);
+
+					if (!sharpCanvas) {
+						sharpCanvas = document.createElement('canvas');
+						sharpCtx = sharpCanvas.getContext('2d');
+					}
+					const sharpW = Math.max(1, Math.round(frame.width));
+					const sharpH = Math.max(1, Math.round(frame.height));
+					if (sharpCanvas.width !== sharpW || sharpCanvas.height !== sharpH) {
+						sharpCanvas.width = sharpW;
+						sharpCanvas.height = sharpH;
+					}
+					sharpCtx.drawImage(
+						previewCanvas,
+						frame.x,
+						frame.y,
+						frame.width,
+						frame.height,
+						0,
+						0,
+						sharpW,
+						sharpH
+					);
+
+					drawSoftBlur(
+						previewCtx,
+						previewCanvas,
+						contain.drawX,
+						contain.drawY,
+						contain.drawWidth,
+						contain.drawHeight,
+						contain.drawX,
+						contain.drawY,
+						contain.drawWidth,
+						contain.drawHeight
+					);
+
+					previewCtx.drawImage(sharpCanvas, frame.x, frame.y, frame.width, frame.height);
+				}
 			}
 
 			animationFrame = requestAnimationFrame(updatePreview);
@@ -369,35 +527,31 @@
 
 		isCapturing = true;
 
-		const ctx = canvas.getContext('2d');
+		const useFilter = ensureFilterSupport();
+		const ctx = canvas.getContext('2d', { willReadFrequently: !useFilter });
 		const format = getFormat();
 		const { sx, sy, sw, sh } = cropRegion;
 		const cropWidth = Math.round(sw);
 		const cropHeight = Math.round(sh);
 		const colorFilter = getColorFilter();
 
+		// Même orientation que le viseur (pas de rotation) — proportions exactes du format
+		let outWidth;
+		let outHeight;
 		if (isSquareFormat()) {
-			const side = Math.min(cropWidth, cropHeight);
-			canvas.width = side;
-			canvas.height = side;
-			ctx.filter = colorFilter;
-			ctx.drawImage(videoElement, sx, sy, sw, sh, 0, 0, side, side);
+			outWidth = Math.min(cropWidth, cropHeight);
+			outHeight = outWidth;
 		} else {
-			// Viseur portrait (90°) → export paysage aux proportions exactes du négatif
-			const longSide = Math.max(cropWidth, cropHeight);
-			const outWidth = longSide;
-			const outHeight = Math.round((longSide * format.filmHeight) / format.filmWidth);
-
-			canvas.width = outWidth;
-			canvas.height = outHeight;
-			ctx.filter = colorFilter;
-			ctx.translate(outWidth, 0);
-			ctx.rotate(Math.PI / 2);
-			ctx.drawImage(videoElement, sx, sy, sw, sh, 0, 0, outHeight, outWidth);
+			outHeight = Math.max(cropWidth, cropHeight);
+			outWidth = Math.round((outHeight * format.filmHeight) / format.filmWidth);
 		}
 
-		ctx.setTransform(1, 0, 0, 1, 0, 0);
-		ctx.filter = 'none';
+		canvas.width = outWidth;
+		canvas.height = outHeight;
+		if (useFilter) ctx.filter = colorFilter;
+		ctx.drawImage(videoElement, sx, sy, sw, sh, 0, 0, outWidth, outHeight);
+		if (useFilter) ctx.filter = 'none';
+		else applyPixelColorTransform(ctx, 0, 0, outWidth, outHeight);
 
 		canvas.toBlob(
 			(blob) => {
