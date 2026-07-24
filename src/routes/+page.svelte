@@ -20,7 +20,6 @@
 
 	function openLibrary(event) {
 		event.stopPropagation();
-		showSettings = false;
 		view = 'library';
 	}
 
@@ -31,14 +30,14 @@
 </script>
 
 <div class="app-container">
-	<header class:open={showSettings}>
+	<header class:open={showSettings && view === 'camera'}>
 		<div
 			class="header-main"
 			on:click={view === 'camera' ? toggleSettings : openCamera}
 			on:keydown={handleHeaderKeydown}
 			role="button"
 			tabindex="0"
-			aria-expanded={showSettings}
+			aria-expanded={showSettings && view === 'camera'}
 			aria-label={view === 'camera'
 				? 'Afficher ou masquer les réglages'
 				: 'Retour à la numérisation'}
@@ -67,11 +66,14 @@
 	</header>
 
 	<div class="content">
-		{#if view === 'library'}
-			<Mediatheque />
-		{:else}
+		<div class="view" class:active={view === 'camera'} aria-hidden={view !== 'camera'}>
 			<Numerisation {showSettings} />
-		{/if}
+		</div>
+		<div class="view" class:active={view === 'library'} aria-hidden={view !== 'library'}>
+			{#if view === 'library'}
+				<Mediatheque />
+			{/if}
+		</div>
 	</div>
 </div>
 
@@ -172,6 +174,23 @@
 		padding: 0;
 		overflow: hidden;
 		background: #000000;
+		position: relative;
+	}
+
+	.view {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		visibility: hidden;
+		pointer-events: none;
+		z-index: 0;
+	}
+
+	.view.active {
+		visibility: visible;
+		pointer-events: auto;
+		z-index: 1;
 	}
 
 	@media (max-width: 480px) {

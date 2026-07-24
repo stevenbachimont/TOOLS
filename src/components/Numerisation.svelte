@@ -239,16 +239,16 @@
 				? { deviceId: { exact: selectedCamera } }
 				: { facingMode: { ideal: 'environment' } };
 
-			const constraints = {
+			// Demande d'abord la plus haute résolution possible
+			stream = await navigator.mediaDevices.getUserMedia({
 				video: {
 					...baseVideo,
-					width: { ideal: 4096 },
-					height: { ideal: 2160 },
+					width: { ideal: 8192 },
+					height: { ideal: 8192 },
 					frameRate: { ideal: 30 }
-				}
-			};
-
-			stream = await navigator.mediaDevices.getUserMedia(constraints);
+				},
+				audio: false
+			});
 
 			const track = stream.getVideoTracks()[0];
 			if (track) {
@@ -269,37 +269,50 @@
 
 	async function applyMaxSensorSettings(track) {
 		const capabilities = typeof track.getCapabilities === 'function' ? track.getCapabilities() : {};
+		const maxWidth = capabilities.width?.max;
+		const maxHeight = capabilities.height?.max;
 		const advanced = [];
 
-		// Dézoom maximal si le périphérique le permet
 		if (capabilities.zoom && typeof capabilities.zoom.min === 'number') {
 			advanced.push({ zoom: capabilities.zoom.min });
 		}
 
-		const nextConstraints = {
-			width: { ideal: capabilities.width?.max || 4096 },
-			height: { ideal: capabilities.height?.max || 2160 }
-		};
+		const attempts = [];
 
-		// Évite le recadrage navigateur quand c'est supporté
-		if (Array.isArray(capabilities.resizeMode) && capabilities.resizeMode.includes('none')) {
-			nextConstraints.resizeMode = { ideal: 'none' };
+		if (maxWidth && maxHeight) {
+			attempts.push({
+				width: { ideal: maxWidth },
+				height: { ideal: maxHeight }
+			});
 		}
 
-		try {
-			await track.applyConstraints({
-				...nextConstraints,
-				...(advanced.length ? { advanced } : {})
-			});
-		} catch (error) {
-			if (advanced.length) {
-				try {
-					await track.applyConstraints({ advanced });
-				} catch (zoomError) {
-					console.warn('Impossible d\'appliquer le dézoom minimal:', zoomError);
+		attempts.push(
+			{ width: { ideal: 4032 }, height: { ideal: 3024 } },
+			{ width: { ideal: 3840 }, height: { ideal: 2160 } },
+			{ width: { ideal: 1920 }, height: { ideal: 1080 } }
+		);
+
+		for (const size of attempts) {
+			try {
+				const next = { ...size };
+				if (Array.isArray(capabilities.resizeMode) && capabilities.resizeMode.includes('none')) {
+					next.resizeMode = { ideal: 'none' };
 				}
-			} else {
-				console.warn('Impossible d\'appliquer les réglages capteur max:', error);
+				await track.applyConstraints({
+					...next,
+					...(advanced.length ? { advanced } : {})
+				});
+				break;
+			} catch (error) {
+				// essaie la contrainte suivante
+			}
+		}
+
+		if (advanced.length) {
+			try {
+				await track.applyConstraints({ advanced });
+			} catch (zoomError) {
+				console.warn('Impossible d\'appliquer le dézoom minimal:', zoomError);
 			}
 		}
 	}
@@ -307,9 +320,7 @@
 	function syncCanvasSize() {
 		if (!previewCanvas || !videoContainer) return;
 		const rect = videoContainer.getBoundingClientRect();
-		// Sur iOS (sans ctx.filter), on limite le DPR pour garder invert/N&B fluides
-		const maxDpr = ensureFilterSupport() ? 2 : 1;
-		const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+		const dpr = Math.min(window.devicePixelRatio || 1, 3);
 		const width = Math.max(1, Math.round(rect.width * dpr));
 		const height = Math.max(1, Math.round(rect.height * dpr));
 		if (previewCanvas.width !== width || previewCanvas.height !== height) {
@@ -357,7 +368,10 @@
 		if (!videoElement || !previewCanvas) return;
 
 		const useFilter = ensureFilterSupport();
-		previewCtx = previewCanvas.getContext('2d', { willReadFrequently: !useFilter });
+		previewCtx = previewCanvas.getContext('2d', {
+			alpha: false,
+			willReadFrequently: !useFilter
+		});
 		syncCanvasSize();
 
 		function updatePreview() {
@@ -399,6 +413,11 @@
 					sh: frame.height / contain.scale
 				};
 
+				previewCtx.imageSmoothingEnabled = true;
+				if ('imageSmoothingQuality' in previewCtx) {
+					previewCtx.imageSmoothingQuality = 'high';
+				}
+
 				previewCtx.clearRect(0, 0, canvasWidth, canvasHeight);
 
 				if (useFilter) {
@@ -434,7 +453,7 @@
 					previewCtx.restore();
 					previewCtx.filter = 'none';
 				} else {
-					// Fallback iOS / Safari : traitement pixel (ctx.filter non supporté)
+					// iOS / Safari : invert & N&B en pixels (ctx.filter indisponible)
 					previewCtx.drawImage(
 						videoElement,
 						0,
@@ -527,13 +546,11 @@
 
 		isCapturing = true;
 
-		const useFilter = ensureFilterSupport();
-		const ctx = canvas.getContext('2d', { willReadFrequently: !useFilter });
+		const ctx = canvas.getContext('2d', { willReadFrequently: true });
 		const format = getFormat();
 		const { sx, sy, sw, sh } = cropRegion;
 		const cropWidth = Math.round(sw);
 		const cropHeight = Math.round(sh);
-		const colorFilter = getColorFilter();
 
 		// Même orientation que le viseur (pas de rotation) — proportions exactes du format
 		let outWidth;
@@ -548,10 +565,9 @@
 
 		canvas.width = outWidth;
 		canvas.height = outHeight;
-		if (useFilter) ctx.filter = colorFilter;
+		// Toujours appliquer invert / N&B via pixels (fiable sur tous les navigateurs)
 		ctx.drawImage(videoElement, sx, sy, sw, sh, 0, 0, outWidth, outHeight);
-		if (useFilter) ctx.filter = 'none';
-		else applyPixelColorTransform(ctx, 0, 0, outWidth, outHeight);
+		applyPixelColorTransform(ctx, 0, 0, outWidth, outHeight);
 
 		canvas.toBlob(
 			(blob) => {
@@ -817,7 +833,8 @@
 		width: 100%;
 		height: 100%;
 		display: block;
-		object-fit: cover;
+		object-fit: contain;
+		image-rendering: auto;
 	}
 
 	.frame-mask {
