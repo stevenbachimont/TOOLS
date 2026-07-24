@@ -2,10 +2,13 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { registerSW } from 'virtual:pwa-register';
+	import { photoLibrary } from '../lib/photos.js';
 
 	let updateServiceWorker;
 
 	onMount(() => {
+		photoLibrary.ready();
+
 		if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
 			updateServiceWorker = registerSW({
 				immediate: true,
