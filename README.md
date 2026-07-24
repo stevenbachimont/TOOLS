@@ -1,10 +1,6 @@
-# Outils Photo Argentique
+# Numérisation Photo Argentique
 
-Application PWA SvelteKit pour smartphone regroupant 3 outils essentiels pour la photo argentique :
-
-1. **Minuteur de développement** - Minuteur avec préréglages et mode personnalisé
-2. **Posemètre** - Calculateur d'exposition avec différentes conditions de lumière
-3. **Numérisation** - Outil de capture photo avec grille et guides
+Application PWA SvelteKit pour smartphone dédiée à la numérisation de photos argentiques.
 
 ## Installation
 
@@ -28,23 +24,10 @@ npm run build
 
 ## Fonctionnalités
 
-### Minuteur de développement
-- Préréglages pour développement, arrêt, fixage, rinçage
-- Minuteur personnalisé (minutes et secondes)
-- Affichage visuel avec cercle de progression
-- Notifications et alarmes sonores
-- Vibration sur mobile
-
-### Posemètre
-- Calcul automatique de la valeur d'exposition (EV)
-- Conditions de lumière prédéfinies
-- Ajustement ISO, ouverture et vitesse d'obturation
-- Affichage de combinaisons équivalentes
-
-### Numérisation
 - Accès à la caméra du smartphone
-- Grille de composition (règle des tiers)
-- Guides de centrage
+- Formats de cadrage : 6x6, 6x7, 6x9, 135
+- Grille de composition et guides de centrage
+- Inversion des couleurs (négatifs) et mode noir & blanc
 - Capture et téléchargement des photos
 
 ## PWA
@@ -64,10 +47,4 @@ Vous pouvez utiliser un outil en ligne comme [PWA Asset Generator](https://githu
 
 ## Utilisation
 
-1. **Minuteur** : Sélectionnez un préréglage ou créez un minuteur personnalisé. Le minuteur affiche un cercle de progression et émet une alarme à la fin.
-
-2. **Posemètre** : Choisissez les conditions de lumière, ajustez l'ISO, l'ouverture et la vitesse d'obturation. L'application calcule automatiquement la valeur d'exposition et propose des combinaisons équivalentes.
-
-3. **Numérisation** : Activez la caméra, utilisez la grille et les guides pour cadrer votre photo argentique, puis capturez et téléchargez l'image.
-
-# TOOLS
+Activez la caméra, choisissez le format, utilisez la grille et les guides pour cadrer votre négatif ou diapositive, puis capturez et téléchargez l'image.

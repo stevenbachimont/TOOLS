@@ -27,20 +27,24 @@
 </main>
 
 <style>
+	:global(html),
 	:global(body) {
 		margin: 0;
 		padding: 0;
+		width: 100%;
+		height: 100%;
+		overflow: hidden;
 		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 		background: #000000;
 		color: #ffffff;
-		min-height: 100vh;
 	}
 
 	main {
 		max-width: 100%;
 		margin: 0 auto;
 		padding: 0;
-		min-height: 100vh;
+		width: 100%;
+		height: 100%;
 		background: #000000;
 	}
 </style>

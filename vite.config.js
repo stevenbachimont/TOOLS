@@ -9,9 +9,9 @@ export default defineConfig({
 			registerType: 'autoUpdate',
 			includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
 			manifest: {
-				name: 'Outils Photo Argentique',
-				short_name: 'Photo Argentique',
-				description: 'Minuteur, posemètre et numérisation pour la photo argentique',
+				name: 'Numérisation Photo Argentique',
+				short_name: 'Numérisation',
+				description: 'Outil de numérisation pour la photo argentique',
 				theme_color: '#1a1a1a',
 				background_color: '#ffffff',
 				display: 'standalone',
